@@ -64,7 +64,7 @@ Las siguientes técnicas fueron implementadas:
 ## Estructura del repositorio
 
 ```text
-forest-fire-data-augmentation-matlab/
+Procesamiento-Digital-de-Im-genes/
 │
 ├── README.md
 ├── src/
@@ -82,3 +82,4 @@ forest-fire-data-augmentation-matlab/
 │
 └── presentation/
     └── Proyecto.pdf
+
