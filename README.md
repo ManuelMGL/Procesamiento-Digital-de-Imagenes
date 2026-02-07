@@ -61,6 +61,84 @@ Las siguientes técnicas fueron implementadas:
 
 ---
 
+
+## Ejemplos
+
+Para la validación de las técnicas implementadas se utilizaron **cinco imágenes diferentes** del *Forest Fire Dataset*.  
+Las imágenes originales empleadas son las siguientes:
+
+- **I1:** `1_JPG.rf.82be351019b363a690c1f9394144c4d9.jpg`
+- **I2:** `30_png.rf.6cbeb530234c3ab68177111a4b97f767.jpg`
+- **I3:** `98_png.rf.72cc9d6f4481c6d509a464692b7da029.jpg`
+- **I4:** `173_JPG.rf.3d77dde3b3a5641f2b17638b3c40b8e3.jpg`
+- **I5:** `264_png.rf.43a917f94cc73493b26b63d01e015184.jpg`
+
+---
+
+### Parámetros utilizados
+
+Para cada imagen se aplicaron distintos parámetros en las operaciones de aumento de datos.  
+Cada elemento de los siguientes arreglos corresponde al índice de la imagen \(I_i\).
+
+#### Volteado
+
+El arreglo `volteados` indica el tipo de volteado aplicado a cada imagen, donde el primer valor corresponde al volteado horizontal y el segundo al volteado vertical.  
+Un valor de `1` indica que el volteado se aplica, mientras que `0` indica que no se aplica.
+
+```matlab
+volteados = {[0, 1], [1, 0], [1, 1], [0, 1], [1, 1]};
+```
+
+#### Rotación
+
+Para la operación de rotación se aplicaron ángulos distintos a cada imagen,
+medidos en grados.  
+La rotación se realizó alrededor del centro de la imagen y se utilizó
+**interpolación bilineal** para estimar los valores de intensidad en la imagen
+resultante, evitando efectos de aliasing.
+
+Cada elemento del arreglo `angulos` corresponde al ángulo de rotación aplicado
+a la imagen \(I\).
+
+```matlab
+angulos = {30, 45, 60, 80, 90};
+```
+
+#### Traslación
+
+La traslación consiste en desplazar la imagen original una determinada cantidad
+de píxeles en las direcciones horizontal y vertical.  
+Cada elemento del arreglo `traslaciones` define el vector de traslación
+\([Tx, Ty]\), expresado en píxeles, aplicado a la imagen correspondiente
+\(I\).
+
+Esta transformación permite simular desplazamientos o variaciones
+en la posición del objeto dentro de la imagen.
+
+```matlab
+traslaciones = {[200, 300], [400, 500], [300, 400], [100, 100], [50, 400]};
+```
+
+#### Escalamiento
+
+El escalamiento consiste en modificar el tamaño de la imagen original mediante
+factores de escala aplicados de forma independiente en los ejes horizontal y
+vertical.  
+Cada elemento del arreglo `escalados` define los factores de escala
+\([Sx, Sy]\) utilizados para la imagen correspondiente \(I\).
+
+Para esta transformación se empleó **interpolación bilineal**, con el objetivo
+de preservar la continuidad espacial de la imagen y reducir la aparición de
+artefactos visuales en la imagen resultante.
+
+```matlab
+escalados = {[2, 3], [4, 5], [3, 4], [10, 10], [5, 4]};
+```
+
+---
+Los valores para las funciones randomErase() y cutMix() fueron calculados de manera aleatoria.
+
+---
 ## Estructura del repositorio
 
 ```text
@@ -82,4 +160,5 @@ Procesamiento-Digital-de-Im-genes/
 │
 └── presentation/
     └── Proyecto.pdf
+
 
