@@ -142,7 +142,7 @@ Los valores para las funciones randomErase() y cutMix() fueron calculados de man
 ## Estructura del repositorio
 
 ```text
-Procesamiento-Digital-de-Im-genes/
+Procesamiento-Digital-de-Imagenes/
 │
 ├── README.md
 ├── src/
@@ -160,5 +160,6 @@ Procesamiento-Digital-de-Im-genes/
 │
 └── presentation/
     └── Proyecto.pdf
+
 
 
