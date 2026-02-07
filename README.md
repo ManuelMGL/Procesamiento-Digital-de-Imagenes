@@ -159,7 +159,8 @@ Procesamiento-Digital-de-Imagenes/
 │   └── augmented/
 │
 └── presentation/
-    └── Proyecto.pdf
+    └── Proyecto-Fase I.pdf
+
 
 
 
