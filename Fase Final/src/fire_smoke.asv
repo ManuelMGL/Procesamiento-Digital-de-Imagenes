@@ -1,0 +1,116 @@
+function fire_smoke(path)
+
+clc; close all;
+
+%% =========================
+K = 6;
+
+%% =========================
+I = imread(path);
+
+lab = rgb2lab(I);
+
+L = lab(:,:,1);
+A = lab(:,:,2);
+B = lab(:,:,3);
+
+%% =========================
+% K-means
+%% =========================
+X = [L(:)/100, A(:)/128, B(:)/128];
+
+[idx,~] = kmeans(X,K, ...
+    'Replicates',3, ...
+    'MaxIter',200);
+
+labels = reshape(idx,size(L));
+
+mask_fire  = false(size(L));
+mask_smoke = false(size(L));
+
+%% =========================
+% CLASIFICACIÓN POR REGIÓN
+%% =========================
+for i = 1:K
+
+    region = (labels==i);
+
+    if nnz(region) < 120
+        continue;
+    end
+
+    Lr = L(region)/100;
+    Ar = A(region)/128;
+    Br = B(region)/128;
+
+    %% =====================
+    % 🔥 FUEGO
+    %% =====================
+    fire_score = mean(Ar) + mean(Br) + 0.5*mean(Lr);
+
+    if fire_score > 0.6
+        mask_fire(region) = true;
+        continue;
+    end
+
+    %% =====================
+    % 🌫 HUMO
+    %% =====================
+    luminance = mean(Lr);
+    saturation = mean(sqrt(Ar.^2 + Br.^2));
+    texture = std(Lr);
+
+    smoke_score = luminance * (1 - saturation) * (1 - texture);
+
+    if smoke_score > 0.25
+        mask_smoke(region) = true;
+    end
+end
+
+%% =========================
+% OVERLAY FINAL
+%% =========================
+overlay = im2double(I);
+
+% 🔥 fuego (rojo)
+overlay(:,:,1) = overlay(:,:,1) + mask_fire*0.8;
+overlay(:,:,2) = overlay(:,:,2).*~mask_fire;
+overlay(:,:,3) = overlay(:,:,3).*~mask_fire;
+
+% 🌫 humo (CYAN)
+overlay(:,:,1) = overlay(:,:,1) .* ~mask_smoke;
+overlay(:,:,2) = overlay(:,:,2) + mask_smoke*0.8;
+overlay(:,:,3) = overlay(:,:,3) + mask_smoke*0.8;
+
+overlay(overlay>1)=1;
+
+%% =========================
+% VISUALIZACIÓN COMPLETA
+%% =========================
+figure;
+
+subplot(2,3,1);
+imshow(I);
+title('RGB original');
+
+subplot(2,3,2);
+imshow(label2rgb(labels));
+title('K-means (regiones)');
+
+subplot(2,3,3);
+imshow(mask_fire);
+title('Fuego detectado');
+
+subplot(2,3,4);
+imshow(mask_smoke);
+title('Humo detectado');
+
+subplot(2,3,5);
+imshow(overlay);
+title('Resultado final');
+
+subplot(2,3,6);
+imshow(L,[]);
+title('Canal L*');
+
+end

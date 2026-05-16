@@ -1,0 +1,353 @@
+function fire(path)
+
+clc;
+close all;
+
+%% =========================================================
+% 0. PARÁMETROS
+%% =========================================================
+
+%% --- CLAHE
+clip = 0.02;
+
+%% --- FILTRO GAUSSIANO
+sigma = 5;
+
+%% --- FILTRO MEDIANA
+median_size = [3 3];
+
+%% --- LAPLACIANO
+alpha = 0.2;
+
+%% --- K-MEANS
+K = 8;
+
+%% --- LBP
+radius = 1;
+neighbors = 8;
+
+%% --- CHI²
+T_fire = 0.25;
+
+%% =========================================================
+% 1. LEER IMAGEN
+%% =========================================================
+I = imread(path);
+
+I_double = im2double(I);
+
+%% =========================================================
+% 2. PREPROCESAMIENTO
+%% =========================================================
+
+%% ---------------------------------------------------------
+% 2.1 FILTRO DE MEDIANA
+% elimina ruido impulsivo
+%% ---------------------------------------------------------
+I_med = medfilt3(I);
+
+%% ---------------------------------------------------------
+% 2.2 FILTRO GAUSSIANO
+% suaviza ruido de alta frecuencia
+%% ---------------------------------------------------------
+I_gauss = imgaussfilt( ...
+                I_med, ...
+                sigma);
+
+%% =========================================================
+% 3. RGB -> LAB
+%% =========================================================
+lab = rgb2lab(I_gauss);
+
+L = lab(:,:,1);
+
+A = lab(:,:,2);
+
+B = lab(:,:,3);
+
+%% =========================================================
+% 4. CLAHE EN L*
+%% =========================================================
+L_norm = L / 100;
+
+Lc = adapthisteq( ...
+        L_norm, ...
+        'ClipLimit', clip, ...
+        'NumTiles', [8 8]);
+
+%% =========================================================
+% 5. FILTRADO POST-CLAHE
+%% =========================================================
+Ls = imgaussfilt(Lc, sigma);
+
+%% =========================================================
+% 6. REALCE DE BORDES
+%% =========================================================
+
+%% gradiente
+G = imgradient(Ls);
+
+%% laplaciano
+H = fspecial('laplacian', alpha);
+
+Lap = imfilter(Ls, H);
+
+%% combinación
+GL = G + Lap;
+
+%% normalización
+GL = mat2gray(GL);
+
+%% =========================================================
+% 7. K-MEANS EN LAB COMPLETO
+%% =========================================================
+
+%% normalización LAB
+L2 = L / 100;
+
+A2 = A / 128;
+
+B2 = B / 128;
+
+%% tensor LAB
+lab_feat = cat(3, L2, A2, B2);
+
+%% vectorización
+X = reshape(lab_feat, [], 3);
+
+%% K-means
+[idx, C] = kmeans( ...
+            X, ...
+            K, ...
+            'Distance', 'sqeuclidean', ...
+            'Replicates', 10, ...
+            'MaxIter', 300, ...
+            'Start', 'plus');
+
+labels = reshape(idx, size(L));
+
+%% =========================================================
+% 8. SELECCIÓN DE CLUSTER FUEGO
+%% =========================================================
+meanL = zeros(K,1);
+
+meanA = zeros(K,1);
+
+meanB = zeros(K,1);
+
+for i = 1:K
+
+    mask = (labels == i);
+
+    meanL(i) = mean(L2(mask));
+
+    meanA(i) = mean(A2(mask));
+
+    meanB(i) = mean(B2(mask));
+
+end
+
+%% score cromático
+score = ...
+      meanA ...
+    + meanB ...
+    + 0.5 * meanL;
+
+%% cluster fuego
+[~, fireCluster] = max(score);
+
+mask_fire = labels == fireCluster;
+
+%% =========================================================
+% 9. LIMPIEZA MORFOLÓGICA
+%% =========================================================
+se = strel('disk',2);
+
+mask_fire = imopen(mask_fire, se);
+
+mask_fire = imclose(mask_fire, se);
+
+mask_fire = bwareaopen(mask_fire, 100);
+
+%% =========================================================
+% 10. REGIÓN DE FUEGO
+%% =========================================================
+L_fire = Ls .* mask_fire;
+
+%% =========================================================
+% 11. LBP
+%% =========================================================
+lbp = extractLBPFeatures( ...
+            L_fire, ...
+            'Radius', radius, ...
+            'NumNeighbors', neighbors);
+
+%% histograma
+Hlbp = histcounts(lbp, 256);
+
+Hlbp = Hlbp / (sum(Hlbp) + eps);
+
+%% =========================================================
+% 12. PATRÓN DE REFERENCIA
+%% =========================================================
+load('Hfire.mat'); % variable Hfire
+
+%% =========================================================
+% 13. DISTANCIA CHI²
+%% =========================================================
+chi2 = 0.5 * sum( ...
+        ((Hlbp - Hfire).^2) ./ ...
+        (Hlbp + Hfire + eps));
+
+%% =========================================================
+% 14. DECISIÓN
+%% =========================================================
+if chi2 < T_fire
+
+    resultado = 'FUEGO DETECTADO';
+
+else
+
+    resultado = 'NO FUEGO';
+
+end
+
+%% =========================================================
+% 15. VISUALIZACIÓN PIPELINE
+%% =========================================================
+figure( ...
+    'Name', 'Pipeline de detección de fuego', ...
+    'NumberTitle', 'off');
+
+%% ---------------------------------------------------------
+% PREPROCESAMIENTO
+%% ---------------------------------------------------------
+subplot(4,3,1);
+
+imshow(I);
+
+title('1. RGB original');
+
+subplot(4,3,2);
+
+imshow(I_med);
+
+title(sprintf( ...
+    '2. Mediana | %dx%d', ...
+    median_size(1), ...
+    median_size(2)));
+
+subplot(4,3,3);
+
+imshow(I_gauss);
+
+title(sprintf( ...
+    '3. Gaussiano | \\sigma = %.2f', ...
+    sigma));
+
+%% ---------------------------------------------------------
+% CONTRASTE
+%% ---------------------------------------------------------
+subplot(4,3,4);
+
+imshow(L_norm,[]);
+
+title('4. Canal L*');
+
+subplot(4,3,5);
+
+imshow(Lc,[]);
+
+title(sprintf( ...
+    '5. CLAHE | Clip = %.3f', ...
+    clip));
+
+subplot(4,3,6);
+
+imhist(Lc);
+
+title('6. Histograma CLAHE');
+
+%% ---------------------------------------------------------
+% REALCE
+%% ---------------------------------------------------------
+subplot(4,3,7);
+
+imshow(Ls,[]);
+
+title('7. L* suavizado');
+
+subplot(4,3,8);
+
+imshow(G,[]);
+
+title('8. Gradiente');
+
+subplot(4,3,9);
+
+imshow(GL,[]);
+
+title(sprintf( ...
+    '9. Gradiente + Laplaciano | \\alpha = %.2f', ...
+    alpha));
+
+%% ---------------------------------------------------------
+% SEGMENTACIÓN Y LBP
+%% ---------------------------------------------------------
+subplot(4,3,10);
+
+imshow(label2rgb(labels));
+
+title(sprintf( ...
+    '10. K-Means Lab | K = %d', ...
+    K));
+
+subplot(4,3,11);
+
+imshow(mask_fire);
+
+title(sprintf( ...
+    '11. Cluster fuego = %d', ...
+    fireCluster));
+
+subplot(4,3,12);
+
+plot(Hlbp,'LineWidth',1.2);
+
+grid on;
+
+title('12. Histograma LBP');
+
+xlabel('Bins');
+
+ylabel('Frecuencia');
+
+%% =========================================================
+% 16. RESULTADO FINAL
+%% =========================================================
+figure( ...
+    'Name', 'Resultado final', ...
+    'NumberTitle', 'off');
+
+overlay = I_double;
+
+%% overlay rojo
+overlay(:,:,1) = ...
+    overlay(:,:,1) + mask_fire * 0.8;
+
+overlay(:,:,2) = ...
+    overlay(:,:,2) .* ~mask_fire;
+
+overlay(:,:,3) = ...
+    overlay(:,:,3) .* ~mask_fire;
+
+overlay(overlay > 1) = 1;
+
+imshow(overlay);
+
+title( ...
+    ['RESULTADO FINAL: ', resultado, ...
+    ' | \chi^2 = ', num2str(chi2)], ...
+    'FontWeight', 'bold');
+
+end

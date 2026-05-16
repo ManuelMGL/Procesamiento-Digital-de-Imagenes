@@ -1,0 +1,189 @@
+function smoke(path)
+
+% 0. Parámetros
+
+clip = 0.02;
+sigma = 15;
+alpha = 0.2;
+K = 8;
+
+radius = 1;
+neighbors = 8;
+
+T_fire = 0.25; % umbral Chi2
+
+
+% 1. Leer imagen
+
+I = imread(path);
+
+
+% 2. Convertir a Lab
+
+lab = rgb2lab(I);
+
+L = lab(:,:,1);
+A = lab(:,:,2);
+B = lab(:,:,3);
+
+
+% 3. CLAHE
+
+Lc = adapthisteq(L/100, ...
+    'ClipLimit', clip, ...
+    'NumTiles', [8 8]);
+
+
+% 4. Suavizado Gaussiano
+
+Ls = imgaussfilt(Lc, sigma);
+
+
+% 5. Gradiente + Laplaciano
+
+G = imgradient(Ls);
+
+H = fspecial('laplacian', alpha);
+Lap = imfilter(Ls, H);
+
+GL = G + Lap;
+
+
+% 6. K-MEANS EN LAB COMPLETO (NORMALIZADO)
+
+L2 = L / 100;
+A2 = A / 128;
+B2 = B / 128;
+
+lab_feat = cat(3, L2, A2, B2);
+X = reshape(lab_feat, [], 3);
+
+[idx, C] = kmeans(X, K, ...
+    'Distance', 'sqeuclidean', ...
+    'Replicates', 10, ...
+    'MaxIter', 300, ...
+    'Start', 'plus');
+
+labels = reshape(idx, size(L));
+
+
+% 7. Selección de cluster fuego
+
+meanL = zeros(K,1);
+meanA = zeros(K,1);
+meanB = zeros(K,1);
+
+for i = 1:K
+    mask = (labels == i);
+    
+    meanL(i) = mean(L2(mask));
+    meanA(i) = mean(A2(mask));
+    meanB(i) = mean(B2(mask));
+end
+
+% score: fuego suele ser cromático + luminancia media-alta
+score = meanA*0.4 + meanB + 0.5 * meanL;
+
+[~, fireCluster] = max(score);
+
+mask_fire = labels == fireCluster;
+
+
+% 8. Región de fuego en L*
+
+L_fire = Ls .* mask_fire;
+
+
+% 9. LBP
+
+lbp = extractLBPFeatures(L_fire, ...
+    'Radius', radius, ...
+    'NumNeighbors', neighbors);
+
+Hlbp = histcounts(lbp, 256);
+Hlbp = Hlbp / (sum(Hlbp) + eps);
+
+
+% 10. Patrón de fuego
+
+load('Hfire.mat'); % variable Hfire
+
+
+% 11. Chi-cuadrado
+
+chi2 = 0.5 * sum(((Hlbp - Hfire).^2) ./ (Hlbp + Hfire + eps));
+
+
+% 12. Decisión
+
+if chi2 < T_fire
+    resultado = 'FUEGO DETECTADO';
+else
+    resultado = 'NO FUEGO';
+end
+
+
+% 13. FIGURA PIPELINE
+
+figure;
+
+subplot(3,3,1);
+imshow(I);
+title('1. RGB original');
+
+subplot(3,3,2);
+imshow(L,[]);
+title('2. Canal L*');
+
+subplot(3,3,3);
+imshow(Lc,[]);
+title(['3. CLAHE | Clip=',num2str(clip)]);
+
+subplot(3,3,4);
+imshow(Ls,[]);
+title(['4. Gaussiano | \sigma=',num2str(sigma)]);
+
+subplot(3,3,5);
+imshow(GL,[]);
+title(['5. Gradiente+Laplaciano | \alpha=',num2str(alpha)]);
+
+subplot(3,3,6);
+imshow(label2rgb(labels));
+title(['6. K-Means Lab | K=',num2str(K)]);
+
+subplot(3,3,7);
+imshow(mask_fire);
+title(['7. Cluster fuego = ',num2str(fireCluster)]);
+
+subplot(3,3,8);
+imshow(L_fire,[]);
+title('8. Región fuego en L*');
+
+subplot(3,3,9);
+plot(Hlbp,'LineWidth',1.2);
+grid on;
+title('9. LBP histogram');
+xlabel('Bins');
+ylabel('Frecuencia');
+
+
+% 14. RESULTADO FINAL (OVERLAY)
+
+figure;
+
+overlay = im2double(I);
+mask = mask_fire;
+
+overlay(:,:,1) = overlay(:,:,1) + mask * 0.8;
+overlay(:,:,2) = overlay(:,:,2) .* ~mask;
+overlay(:,:,3) = overlay(:,:,3) .* ~mask;
+
+overlay(overlay > 1) = 1;
+
+imshow(overlay);
+
+title(['RESULTADO FINAL: ', resultado, ...
+    ' | \chi^2 = ', num2str(chi2)], ...
+    'FontWeight','bold');
+
+end
